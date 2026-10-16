@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Environment
+.env
+
+# Downloaded AI models
+backend/models/
+
+# Editors
+.vscode/
+.idea/
