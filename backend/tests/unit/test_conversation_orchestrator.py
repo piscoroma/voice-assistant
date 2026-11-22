@@ -85,3 +85,43 @@ def test_process_does_not_save_exchange_if_synthesis_fails(services, tmp_path):
         orchestrator.process(str(tmp_path / "request.wav"), "esp32-salotto")
 
     conversation.add_exchange.assert_not_called()
+
+
+def test_process_text_skips_audio_and_stores_exchange(services):
+    orchestrator, transcription, conversation, llm, speech = services
+
+    result = orchestrator.process_text("esp32-salotto", "  Accendi la luce  ")
+
+    assert result == "Risposta dell'assistente"
+    transcription.transcribe.assert_not_called()
+    speech.synthesize.assert_not_called()
+    conversation.get_history.assert_called_once_with("esp32-salotto")
+    llm.generate_response.assert_called_once_with(
+        history=[{"role": "assistant", "content": "Dimmi"}],
+        user_message="Accendi la luce",
+    )
+    conversation.add_exchange.assert_called_once_with(
+        "esp32-salotto",
+        "Accendi la luce",
+        "Risposta dell'assistente",
+    )
+
+
+def test_process_text_rejects_blank_message(services):
+    orchestrator, _transcription, conversation, llm, _speech = services
+
+    with pytest.raises(ValueError, match="cannot be empty"):
+        orchestrator.process_text("esp32-salotto", "   ")
+
+    conversation.get_history.assert_not_called()
+    llm.generate_response.assert_not_called()
+
+
+def test_process_text_does_not_save_exchange_if_llm_fails(services):
+    orchestrator, _transcription, conversation, llm, _speech = services
+    llm.generate_response.side_effect = RuntimeError("LLM unavailable")
+
+    with pytest.raises(RuntimeError, match="LLM unavailable"):
+        orchestrator.process_text("esp32-salotto", "Ciao")
+
+    conversation.add_exchange.assert_not_called()

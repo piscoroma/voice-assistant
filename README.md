@@ -90,7 +90,16 @@ cd backend
 uvicorn voice_assistant.main:app --reload
 ```
 
-The server listens on `http://localhost:8000`. Interactive docs: `http://localhost:8000/docs`.
+To accept connections from other machines on the network, e.g. an ESP32 device, bind to all interfaces:
+
+```bash
+cd backend
+uvicorn voice_assistant.main:app --host 0.0.0.0 --port 8000
+```
+
+`--host 0.0.0.0` exposes the service on every network interface, so make sure the firewall/network allow port `8000` only where intended. Add `--reload` for development if needed.
+
+The server listens on port `8000`. Interactive docs: `http://localhost:8000/docs`. The Docker image already starts Uvicorn with `--host 0.0.0.0`.
 
 ## API
 
@@ -154,6 +163,27 @@ The LLM is instructed to answer in Italian, concisely and without Markdown, sinc
 Conversation state is in memory, per process: the last `CONVERSATION_MAX_TURNS` exchanges per `esp_id`, dropped after `CONVERSATION_TTL_SECONDS` of inactivity. It is lost on restart and not shared across multiple workers.
 
 Errors: `400` for an empty upload or blank `esp_id`, `422` when no speech is detected in the audio or the request is invalid, `500` if any pipeline step fails.
+
+### `POST /conversation/text`
+
+Text-only variant of `/conversation`: no transcription and no synthesis, useful for testing the LLM and conversation history without audio. It shares the same per-device history as the audio endpoint.
+
+JSON body:
+
+- `esp_id`: device identifier
+- `message`: user text, 1–2000 characters
+
+```bash
+curl -X POST http://localhost:8000/conversation/text \
+  -H "Content-Type: application/json" \
+  -d '{"esp_id": "esp32-living-room", "message": "Che tempo fa?"}'
+```
+
+```json
+{ "reply": "Non ho accesso al meteo in tempo reale, ma posso aiutarti con altro." }
+```
+
+Errors: `422` for a blank `esp_id`/`message` or invalid payload, `500` if the LLM call fails.
 
 ## Docker
 

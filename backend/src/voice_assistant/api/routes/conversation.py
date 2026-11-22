@@ -7,6 +7,10 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
+from voice_assistant.schemas.conversation import (
+    ConversationTextRequest,
+    ConversationTextResponse,
+)
 from voice_assistant.services.conversation_orchestrator import ConversationOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -81,3 +85,30 @@ def conversation(
             temp_path.unlink(missing_ok=True)
 
         audio.file.close()
+
+
+@router.post("/conversation/text", response_model=ConversationTextResponse)
+def conversation_text(
+    request: Request,
+    payload: ConversationTextRequest,
+) -> ConversationTextResponse:
+    orchestrator: ConversationOrchestrator = request.app.state.conversation_orchestrator
+
+    try:
+        reply = orchestrator.process_text(
+            esp_id=payload.esp_id,
+            user_message=payload.message,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Text conversation processing failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Conversation processing failed",
+        ) from exc
+
+    return ConversationTextResponse(reply=reply)

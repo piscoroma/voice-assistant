@@ -30,24 +30,33 @@ class ConversationOrchestrator:
         if not user_message:
             raise ValueError("No speech detected in the audio")
 
-        # Retrieve the conversation history for this ESP32.
-        history = self._conversation_service.get_history(esp_id)
-
         # Call the LLM service to generate the assistant response.
-        assistant_message = self._llm_service.generate_response(
-            history=history,
-            user_message=user_message,
-        )
+        assistant_message = self._generate_reply(esp_id, user_message)
 
         # Generate the assistant audio with Piper.
         resp_audio_path = self._speech_synthesis_service.synthesize(assistant_message)
 
         # Save the exchange only once the answer audio exists: if synthesis
         # fails, the user never heard the reply and it must not pollute history.
-        self._conversation_service.add_exchange(
-            esp_id,
-            user_message,
-            assistant_message,
-        )
+        self._conversation_service.add_exchange(esp_id, user_message, assistant_message)
 
         return resp_audio_path
+
+    def process_text(self, esp_id: str, user_message: str) -> str:
+        """Text-only turn: same LLM and history as `process`, no STT/TTS."""
+        message = user_message.strip()
+
+        if not message:
+            raise ValueError("user_message cannot be empty")
+
+        assistant_message = self._generate_reply(esp_id, message)
+        self._conversation_service.add_exchange(esp_id, message, assistant_message)
+
+        return assistant_message
+
+    def _generate_reply(self, esp_id: str, user_message: str) -> str:
+        history = self._conversation_service.get_history(esp_id)
+        return self._llm_service.generate_response(
+            history=history,
+            user_message=user_message,
+        )
