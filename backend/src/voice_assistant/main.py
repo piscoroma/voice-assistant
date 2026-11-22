@@ -8,11 +8,14 @@ from voice_assistant.core.logging import setup_logging
 from voice_assistant.infrastructure.llm.deepseek import DeepSeekProvider
 from voice_assistant.infrastructure.speech.piper import PiperSynthesizer
 from voice_assistant.infrastructure.speech.whisper import WhisperRecognizer
+from voice_assistant.infrastructure.weather.open_meteo import OpenMeteoContext
 from voice_assistant.services.conversation import ConversationService
 from voice_assistant.services.conversation_orchestrator import ConversationOrchestrator
 from voice_assistant.services.llm import LLMService
 from voice_assistant.services.speech_synthesis import SpeechSynthesisService
 from voice_assistant.services.transcription import TranscriptionService
+from voice_assistant.tools.base import Tool
+from voice_assistant.tools.weather import build_weather_tool
 
 
 @asynccontextmanager
@@ -21,7 +24,14 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     recognizer = WhisperRecognizer(settings)
     synthesizer = PiperSynthesizer(settings)
-    deepseek = DeepSeekProvider(settings)
+
+    tools: list[Tool] = [build_weather_tool(settings.assistant_city)]
+
+    deepseek = DeepSeekProvider(
+        settings,
+        context_provider=OpenMeteoContext(settings.assistant_city).current_context,
+        tools=tools,
+    )
     app.state.transcription_service = TranscriptionService(recognizer)
     app.state.speech_synthesis_service = SpeechSynthesisService(synthesizer)
     app.state.llm_service = LLMService(deepseek)

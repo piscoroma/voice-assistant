@@ -14,7 +14,8 @@ dependencies = [
     "av<19",
     "pydantic-settings",
     "piper-tts",
-    "openai"
+    "openai",
+    "httpx",
 ]
 
 [project.optional-dependencies]

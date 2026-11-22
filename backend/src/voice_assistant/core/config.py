@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     deepseek_timeout: float = 30.0
     deepseek_max_retries: int = 2
 
+    assistant_city: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

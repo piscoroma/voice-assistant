@@ -14,6 +14,7 @@ def settings():
         deepseek_model="deepseek-flash",
         deepseek_timeout=30.0,
         deepseek_max_retries=2,
+        assistant_city="Roma",
     )
 
 
@@ -86,3 +87,59 @@ def test_generate_response_propagates_api_errors(settings):
 
         with pytest.raises(RuntimeError, match="API error"):
             provider.generate_response(history=[], user_message="Ciao")
+
+
+def test_system_prompt_includes_assistant_city(settings):
+    with patch("voice_assistant.infrastructure.llm.deepseek.OpenAI") as openai_mock:
+        client = openai_mock.return_value
+        client.chat.completions.create.return_value = make_response("Ciao")
+        provider = DeepSeekProvider(settings)
+
+        provider.generate_response(history=[], user_message="Che tempo fa?")
+
+    system_message = client.chat.completions.create.call_args.kwargs["messages"][0]
+    assert system_message["role"] == "system"
+    assert "Roma" in system_message["content"]
+
+
+def test_system_prompt_omits_city_when_unset(settings):
+    settings.assistant_city = "   "
+
+    with patch("voice_assistant.infrastructure.llm.deepseek.OpenAI") as openai_mock:
+        client = openai_mock.return_value
+        client.chat.completions.create.return_value = make_response("Ciao")
+        provider = DeepSeekProvider(settings)
+
+        provider.generate_response(history=[], user_message="Ciao")
+
+    system_message = client.chat.completions.create.call_args.kwargs["messages"][0]
+    assert "assistente vocale domestico" in system_message["content"]
+    assert "L'utente vive" not in system_message["content"]
+
+
+def test_system_prompt_includes_current_context(settings):
+    with patch("voice_assistant.infrastructure.llm.deepseek.OpenAI") as openai_mock:
+        client = openai_mock.return_value
+        client.chat.completions.create.return_value = make_response("Ciao")
+        provider = DeepSeekProvider(
+            settings,
+            context_provider=lambda: "Ora e data locali: domenica 22/11/2026 15:30.",
+        )
+
+        provider.generate_response(history=[], user_message="Che tempo fa?")
+
+    system_message = client.chat.completions.create.call_args.kwargs["messages"][0]
+    assert "\n\nCONTESTO ATTUALE" in system_message["content"]
+    assert "domenica 22/11/2026 15:30" in system_message["content"]
+
+
+def test_system_prompt_omits_empty_context(settings):
+    with patch("voice_assistant.infrastructure.llm.deepseek.OpenAI") as openai_mock:
+        client = openai_mock.return_value
+        client.chat.completions.create.return_value = make_response("Ciao")
+        provider = DeepSeekProvider(settings, context_provider=lambda: "   ")
+
+        provider.generate_response(history=[], user_message="Ciao")
+
+    system_message = client.chat.completions.create.call_args.kwargs["messages"][0]
+    assert "\n\nCONTESTO ATTUALE" not in system_message["content"]
