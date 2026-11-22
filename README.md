@@ -26,7 +26,10 @@ backend/
     ├── services/                   # orchestration, conversation state, synthesis, LLM wrapper
     ├── infrastructure/
     │   ├── speech/                 # faster-whisper and Piper adapters
-    │   └── llm/                    # DeepSeek provider
+    │   ├── llm/                    # DeepSeek provider with tool-calling loop
+    │   ├── web/                    # DeepSeek Search API client
+    │   └── weather/                # Open-Meteo current time/weather context
+    ├── tools/                      # LLM tools (web_search, get_weather; domotica next)
     ├── schemas/                    # Pydantic request/response models
     └── core/                       # configuration and logging
 ```
@@ -71,6 +74,8 @@ Settings are read from environment variables or a `.env` file in the working dir
 | `WHISPER_CPU_THREADS` | no | `4` | CPU threads used by Whisper |
 | `CONVERSATION_MAX_TURNS` | no | `5` | Exchanges kept per device |
 | `CONVERSATION_TTL_SECONDS` | no | `600` | Inactivity before a device session expires |
+| `ASSISTANT_CITY` | no | empty | City used for prompt context: resolved via Open-Meteo to add local time, current weather and a 3-day forecast with day-part breakdown; time-only context when empty |
+| `WEB_SEARCH_ENABLED` | no | `true` | Expose the `web_search` tool to the LLM (news and current information) |
 
 Example `.env`:
 
@@ -79,11 +84,16 @@ PIPER_MODEL_PATH=/models/it_IT-paola-medium.onnx
 DEEPSEEK_API_KEY=your-key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
+ASSISTANT_CITY=Roma
 ```
+
+`ASSISTANT_CITY` is free text. When set, the backend geocodes it with Open-Meteo (no API key required) and injects a `CONTESTO ATTUALE` block with local date/time, current weather and a 3-day forecast broken down into night/morning/afternoon/evening into the system prompt. Weather is cached for 10 minutes; if Open-Meteo is unreachable the service keeps working with time-only context. For other cities or details not in the injected context, the model can call the `get_weather` tool. No data is invented by the model.
 
 Settings are cached: restart the service after changing the environment.
 
 ## Running
+
+Local development (loopback only):
 
 ```bash
 cd backend
@@ -184,6 +194,22 @@ curl -X POST http://localhost:8000/conversation/text \
 ```
 
 Errors: `422` for a blank `esp_id`/`message` or invalid payload, `500` if the LLM call fails.
+
+## Tools, weather and web search
+
+The model has two tools:
+
+- `get_weather`: current conditions and 3-day forecast (night/morning/afternoon/evening) for any city. Used for cities other than the home city or for details missing from the injected context.
+- `web_search`: news and current information, backed by the [DeepSeek Search API](https://api-docs.deepseek.com/guides/search) (same API key, billed per successful request, 5 results per query).
+
+The provider implements an OpenAI-style tool-calling loop: it executes requested tools and feeds the results back to the model, up to 3 rounds per turn before giving up with an error.
+
+Weather is deliberately hybrid: a compact summary for the home city is injected into the system prompt (fast, deterministic, no LLM round-trip), while the tool handles other cities and extra detail. The model is instructed to cite web sources briefly, not to call `web_search` for weather/date/time, and never to mention tools to the user.
+
+- Tool calls are internal to a turn and are not stored in the conversation history.
+- Each execution is logged with tool name, arguments (truncated to 500 chars) and duration, so you can see how often each tool actually runs.
+
+New tools (home automation will be next) live in `backend/src/voice_assistant/tools/` and are registered in `main.py`. The loop in `DeepSeekProvider` is tool-agnostic.
 
 ## Docker
 

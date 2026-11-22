@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     deepseek_max_retries: int = 2
 
     assistant_city: str = ""
+    web_search_enabled: bool = True
 
 
 @lru_cache

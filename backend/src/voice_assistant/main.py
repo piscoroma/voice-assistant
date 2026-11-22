@@ -9,6 +9,7 @@ from voice_assistant.infrastructure.llm.deepseek import DeepSeekProvider
 from voice_assistant.infrastructure.speech.piper import PiperSynthesizer
 from voice_assistant.infrastructure.speech.whisper import WhisperRecognizer
 from voice_assistant.infrastructure.weather.open_meteo import OpenMeteoContext
+from voice_assistant.infrastructure.web.deepseek_search import DeepSeekSearchClient
 from voice_assistant.services.conversation import ConversationService
 from voice_assistant.services.conversation_orchestrator import ConversationOrchestrator
 from voice_assistant.services.llm import LLMService
@@ -16,6 +17,7 @@ from voice_assistant.services.speech_synthesis import SpeechSynthesisService
 from voice_assistant.services.transcription import TranscriptionService
 from voice_assistant.tools.base import Tool
 from voice_assistant.tools.weather import build_weather_tool
+from voice_assistant.tools.web_search import build_web_search_tool
 
 
 @asynccontextmanager
@@ -26,6 +28,8 @@ async def lifespan(app: FastAPI):
     synthesizer = PiperSynthesizer(settings)
 
     tools: list[Tool] = [build_weather_tool(settings.assistant_city)]
+    if settings.web_search_enabled:
+        tools.append(build_web_search_tool(DeepSeekSearchClient(settings)))
 
     deepseek = DeepSeekProvider(
         settings,

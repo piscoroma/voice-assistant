@@ -25,6 +25,7 @@ class DeepSeekProvider:
         self._tools_by_name = {tool.name: tool for tool in self._tools}
         self._system_prompt = self._build_system_prompt(
             settings.assistant_city,
+            has_web_search="web_search" in self._tools_by_name,
             has_weather_tool="get_weather" in self._tools_by_name,
         )
         self._context_provider = context_provider
@@ -38,6 +39,7 @@ class DeepSeekProvider:
     @staticmethod
     def _build_system_prompt(
         city: str,
+        has_web_search: bool,
         has_weather_tool: bool,
     ) -> str:
         prompt = (
@@ -59,6 +61,12 @@ class DeepSeekProvider:
                 " Hai il tool get_weather per altre città o per dettagli non"
                 " presenti nel CONTESTO ATTUALE: in quei casi usalo invece di"
                 " inventare."
+            )
+        if has_web_search:
+            prompt += (
+                " Hai il tool web_search per notizie e informazioni attuali:"
+                " usalo quando la risposta non è nel CONTESTO ATTUALE, cita"
+                " brevemente la fonte e non menzionare i tool all'utente."
             )
         return prompt
 
